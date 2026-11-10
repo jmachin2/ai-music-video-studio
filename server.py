@@ -1,5 +1,6 @@
 """Servidor local, sin servicios de pago: Whisper para audio y Ollama para storyboard."""
-import cgi
+from email.parser import BytesParser
+from email.policy import default
 import json
 import os
 import tempfile
@@ -99,31 +100,23 @@ class Handler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", "0"))
             if not 0 < size < 150_000_000:
                 raise ValueError("El archivo debe medir menos de 150 MB.")
-            content_type, params = cgi.parse_header(self.headers.get("Content-Type", ""))
-            if content_type != "multipart/form-data":
-                raise ValueError("Solicitud inválida.")
-            form = cgi.FieldStorage(
-                fp=self.rfile,
-                headers=self.headers,
-                environ={
-                    "REQUEST_METHOD": "POST",
-                    "CONTENT_TYPE": self.headers["Content-Type"],
-                    "CONTENT_LENGTH": str(size),
-                },
-                keep_blank_values=True,
+            content_type = self.headers.get("Content-Type", "")
+            if not content_type.lower().startswith("multipart/form-data"):
+                raise ValueError("Solicitud inválida: se esperaba multipart/form-data.")
+            body = self.rfile.read(size)
+            message = BytesParser(policy=default).parsebytes(
+                b"MIME-Version: 1.0\r\nContent-Type: " + content_type.encode("ascii") + b"\r\n\r\n" + body
             )
-            upload = form["audio"]
-            filename = os.path.basename(upload.filename or "cancion.mp3")
+            upload = next((p for p in message.iter_parts() if p.get_param("name", header="content-disposition") == "audio"), None)
+            if upload is None:
+                raise ValueError("Falta el archivo de audio.")
+            filename = os.path.basename(upload.get_filename() or "cancion.mp3")
             suffix = Path(filename).suffix.lower()
             if suffix not in (".mp3", ".wav", ".m4a", ".flac", ".ogg", ".webm"):
                 raise ValueError("Usa MP3, WAV, M4A, FLAC, OGG o WebM.")
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
                 path = f.name
-                while True:
-                    chunk = upload.file.read(1 << 20)
-                    if not chunk:
-                        break
-                    f.write(chunk)
+                f.write(upload.get_payload(decode=True))
             try:
                 entries = transcribe(path)
             finally:
