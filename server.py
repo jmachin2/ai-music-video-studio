@@ -5,6 +5,8 @@ import json
 import os
 import tempfile
 import urllib.request
+import urllib.parse
+from local_media import MediaError, comfy_status, generate_image, fetch_generated_image, convert_webm_to_mp4, MAX_WEBM_BYTES
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -82,6 +84,20 @@ def generate_storyboard(entries, style):
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path == "/api/comfy/status":
+            try:
+                self.send_json(comfy_status(), 200)
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, 503)
+            return
+        if self.path.startswith("/api/comfy/image?"):
+            try:
+                params = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                payload, mime = fetch_generated_image(params.get("url", [""])[0])
+                self.send_binary(payload, mime, "no-store")
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, 400)
+            return
         if self.path not in ("/", "/index.html"):
             self.send_error(404)
             return
@@ -93,6 +109,32 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
+        if self.path == "/api/comfy/generate":
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size < 32_000:
+                    raise MediaError("La petición de imagen debe ser menor de 32 KB.")
+                data = json.loads(self.rfile.read(size))
+                url = generate_image(
+                    data.get("visual", ""), style=data.get("style", "infantil"),
+                    checkpoint=data.get("checkpoint") or None,
+                )
+                self.send_json({"image_url": "/api/comfy/image?" + urllib.parse.urlencode({"url": url})}, 200)
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, 400)
+            return
+        if self.path == "/api/mp4":
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size <= MAX_WEBM_BYTES:
+                    raise MediaError("Tamaño del vídeo no válido. Máximo 500 MB.")
+                if not self.headers.get("Content-Type", "").startswith("video/webm"):
+                    raise MediaError("Se esperaba un vídeo WebM.")
+                video = convert_webm_to_mp4(self.rfile.read(size))
+                self.send_binary(video, "video/mp4", "attachment; filename=mi-videoclip.mp4")
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, 400)
+            return
         if self.path != "/api/automatico":
             self.send_error(404)
             return
@@ -131,6 +173,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(result, 200)
         except Exception as e:
             self.send_json({"error": str(e)}, 400)
+
+    def send_binary(self, data, content_type, disposition):
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Disposition", disposition)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def send_json(self, obj, code):
         data = json.dumps(obj, ensure_ascii=False).encode()
