@@ -1,37 +1,40 @@
-# AI Music Video Studio · Windows (versión 0.3 experimental)
+# AI Music Video Studio · Windows (versión 0.4, experimental)
 
-Aplicación de escritorio para Windows con interfaz propia, basada en la V2. Gratuita, sin cuentas ni créditos por generación. Todo el procesamiento del audio se realiza localmente; los modelos se descargan la primera vez.
+**Objetivo:** programa de escritorio para Windows que transforme una canción MP3 en un videoclip animado, utilizando únicamente herramientas gratuitas ejecutadas en el ordenador. No se requieren suscripciones ni servicios de IA de pago.
 
-## Instalar y abrir en Windows
+## Estado real
 
-1. Instala **Python 3.12 de 64 bits** (marca *Add Python to PATH*). Necesitas Windows con Microsoft Edge WebView2 Runtime; suele venir instalado con Windows 10/11.
-2. Descarga el repositorio como ZIP y descomprímelo en una carpeta normal (no lo ejecutes dentro del ZIP).
-3. Ejecuta `INSTALAR_WINDOWS.bat` una sola vez; instalará las librerías en `.venv`.
-4. Para crear el storyboard automáticamente con IA, instala Ollama desde https://ollama.com/download y ejecuta `ollama pull llama3.2:3b` en una consola. Déjalo funcionando.
-5. Haz doble clic en `ABRIR_APLICACION_WINDOWS.bat`: se abrirá una ventana independiente, sin navegador visible.
-6. Importa un MP3 y pulsa **Extraer letra y crear storyboard con IA**.
+- **Interfaz Windows:** incorporada mediante pywebview (WebView2), pendiente de prueba en Windows real.
+- **Letra automática:** faster-whisper local, experimental con voz cantada.
+- **Storyboard automático:** Ollama local con modelo llama3.2:3b. Si no responde, se usa un storyboard básico.
+- **Ilustraciones IA:** integración nueva con la API local de ComfyUI (modelos tipo Stable Diffusion con nodos básicos). Hay botones por escena y para generar las imágenes pendientes. El modelo no está incluido.
+- **Vídeo:** editor con movimientos de cámara y exportación MP4 mediante grabación WebM + conversión local con FFmpeg. No es exportación rápida: requiere reproducir el audio entero.
+- **Instalador .exe:** flujo de compilación Windows con PyInstaller + Inno Setup en GitHub Actions. La compilación y el instalador no se han validado todavía.
 
-**Alternativa:** `INICIAR_WINDOWS.bat` permite abrir la versión en navegador en `http://127.0.0.1:8765`.
+## Instalación de desarrollo en Windows 10/11
 
-**Crear EXE en Windows:** ejecuta `CREAR_EXE_WINDOWS.bat`. Es una compilación *onedir* con PyInstaller: la carpeta completa de `dist/AI-Music-Video-Studio/` constituye la distribución; el `.exe` no contiene Ollama ni los modelos Whisper. No se ha compilado ni probado en Windows desde este entorno.
+1. Instala Python 3.12 (64 bits) y el runtime Microsoft Edge WebView2.
+2. Descomprime el repositorio. Ejecuta `INSTALAR_WINDOWS.bat` una vez.
+3. Ejecuta `ABRIR_APLICACION_WINDOWS.bat`. Se abrirá la aplicación en una ventana de escritorio.
+4. Instala Ollama en Windows, descarga el modelo con `ollama pull llama3.2:3b` y mantenlo abierto.
+5. Instala ComfyUI localmente con un modelo compatible de Stable Diffusion en `ComfyUI/models/checkpoints`. Inicia ComfyUI en `http://127.0.0.1:8188`. En la aplicación pulsa **Comprobar ComfyUI**.
+6. Instala FFmpeg y añádelo al PATH de Windows para exportar MP4.
+7. Sube una canción, extrae letra y storyboard, genera ilustraciones y exporta.
 
-## Funciones reales de esta versión
+**Advertencia:** no hay un asistente que instale Ollama, ComfyUI, los modelos y FFmpeg automáticamente. El instalador del programa no incluye estos componentes grandes. La descarga inicial de los modelos necesita internet; después el procesamiento es local.
 
-- Carga de audio local, transcripción **experimental** con faster-whisper y preparación de storyboard con Ollama.
-- Si Ollama no está disponible, storyboard simplificado a partir de los fragmentos reconocidos.
-- Editor de texto y de escenas, imágenes añadidas manualmente, movimientos de cámara, previsualización y exportación **WebM** con audio.
-- Servidor HTTP limitado al equipo local (`127.0.0.1`), con puerto aleatorio cuando se utiliza la aplicación de escritorio.
+## Generación del instalador desde GitHub
 
-## Pendiente para siguientes versiones
+Se añadió `.github/workflows/windows-installer.yml`. En la pestaña **Actions** del repositorio, busca **Windows desktop installer** y ejecuta **Run workflow**. Si finaliza correctamente, descarga el artefacto **AI-Music-Video-Studio-Windows-Installer**, que contiene el instalador de Windows.
 
-- Generación automática de imágenes con ComfyUI en tu NVIDIA.
-- Exportación directa a MP4 y sincronización avanzada por frase.
-- Instalador de Windows de un solo clic, firmado y probado en Windows.
+Para compilarlo en un PC Windows: `CREAR_EXE_WINDOWS.bat` genera la carpeta de programa con PyInstaller. `installer.iss` se utiliza con Inno Setup 6 para construir el instalador.
 
-## Limitaciones
+**Limitaciones conocidas**
 
-- Las canciones cantadas, coros y nombres propios pueden transcribirse mal. Revisa la letra.
-- La GPU NVIDIA no se aprovecha automáticamente en Whisper: por defecto se ejecuta en CPU. El modo CUDA exige librerías CUDA/cuDNN compatibles.
-- La ventana de escritorio usa Microsoft Edge WebView2. Si tu Windows no lo incluye, instálalo desde Microsoft.
-- No publiques canciones, contraseñas ni modelos pesados en GitHub. Nunca se necesitan claves de API de pago.
-- El archivo MP3 se procesa localmente y el temporal se elimina tras la transcripción.
+- Whisper puede equivocarse con canciones, coros y nombres propios: revisa la transcripción.
+- La consistencia de personajes entre varias escenas **no está resuelta** todavía; generar imágenes por descripción puede cambiar el aspecto de los personajes.
+- La secuencia del storyboard se reparte por duración relativa, **sin alineación exacta de cada frase**.
+- ComfyUI necesita una GPU/modelo compatibles; checkpoints SDXL, SD 1.5 u otros pueden variar en memoria y resultados. Un workflow clásico no sirve para todos los tipos de modelo (por ejemplo FLUX).
+- La exportación MP4 usa la grabación de canvas del motor WebView2; es necesario comprobar que MediaRecorder y captureStream están disponibles en el equipo.
+- GitHub es solo el repositorio: la aplicación y los motores de IA se ejecutan en Windows. El repositorio actual es público; no subas canciones ni archivos personales.
+- El servidor escucha únicamente en `127.0.0.1`, no en internet.
