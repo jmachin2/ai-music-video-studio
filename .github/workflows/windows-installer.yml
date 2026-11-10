@@ -26,6 +26,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install "pyinstaller>=6,<7"
+      - name: Check Python syntax
+        run: python -m py_compile server.py local_media.py desktop.py
       - name: Build standalone Windows application
         run: |
           python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AI-Music-Video-Studio" --add-data "index.html;." --collect-all "faster_whisper" --collect-all "ctranslate2" desktop.py
